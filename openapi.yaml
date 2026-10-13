@@ -1,0 +1,233 @@
+openapi: 3.1.0
+info:
+  title: DataZen Backend API
+  description: Backend Route Handler API for DataZen - mobile data usage tracking, quota waste calculation, and depletion forecasting.
+  version: 1.0.0
+servers:
+  - url: /api/v1
+    description: API v1 root
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns health status, uptime timestamp, and service info. Unauthenticated.
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: healthy
+                      service:
+                        type: string
+                        example: datazen-backend
+                      version:
+                        type: string
+                        example: 1.0.0
+                      timestamp:
+                        type: string
+                  error:
+                    type: "null"
+
+  /usage/sync:
+    post:
+      summary: Sync batch daily and app usage
+      description: Idempotent upsert of device daily totals and per-app usage. Rate-limited per user.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceId, records]
+              properties:
+                deviceId:
+                  type: string
+                  format: uuid
+                records:
+                  type: array
+                  items:
+                    type: object
+                    required: [date, totalMb]
+                    properties:
+                      date:
+                        type: string
+                        example: "2026-10-13"
+                      totalMb:
+                        type: number
+                        example: 1250.5
+                      apps:
+                        type: array
+                        items:
+                          type: object
+                          required: [appName, packageName, usedMb]
+                          properties:
+                            appName:
+                              type: string
+                            packageName:
+                              type: string
+                            usedMb:
+                              type: number
+      responses:
+        '200':
+          description: Sync successful
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '429':
+          description: Rate limit exceeded
+
+  /usage/summary:
+    get:
+      summary: Get usage summary
+      description: Today, this week, this month totals, remaining quota, and wasted data.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Usage summary
+        '401':
+          description: Unauthorized
+
+  /usage/history:
+    get:
+      summary: Usage history aggregation
+      parameters:
+        - name: range
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+            default: daily
+        - name: from
+          in: query
+          schema:
+            type: string
+            example: "2026-10-01"
+        - name: to
+          in: query
+          schema:
+            type: string
+            example: "2026-10-13"
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Aggregated usage history
+
+  /usage/apps:
+    get:
+      summary: App usage breakdown
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "2026-10-13"
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Breakdown of app consumption sorted by usage
+
+  /usage/prediction:
+    get:
+      summary: Depletion date prediction
+      description: Forecasts when the monthly quota will be exhausted based on rolling average consumption.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Prediction calculation
+
+  /settings/quota:
+    get:
+      summary: Get user quota settings
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Quota limits and alert time
+    put:
+      summary: Update quota settings
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dailyLimitMb, monthlyLimitMb]
+              properties:
+                dailyLimitMb:
+                  type: number
+                monthlyLimitMb:
+                  type: number
+                alertTime:
+                  type: string
+                  example: "20:00"
+      responses:
+        '200':
+          description: Quota updated
+
+  /devices:
+    get:
+      summary: List user devices
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of registered devices
+    post:
+      summary: Register a new device
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceName]
+              properties:
+                deviceName:
+                  type: string
+                platform:
+                  type: string
+                  enum: [android, ios, other]
+      responses:
+        '201':
+          description: Device created
+    delete:
+      summary: Delete a device
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Device removed
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
