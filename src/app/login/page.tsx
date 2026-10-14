@@ -11,7 +11,7 @@ import { LoginSchema, type LoginInput } from "@/validators/auth.schema";
 import { createClient } from "@/lib/supabase/client";
 import { AuthLayout } from "@/components/auth/auth-layout";
 
-export function LoginForm() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/dashboard";
